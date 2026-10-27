@@ -1,0 +1,336 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Colab</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/eclipse.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js">
+</script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f7fb;color:#202124;font-family:Arial}
+header{position:sticky;top:0;background:white;padding:12px;border-bottom:1px solid #ddd;z-index:2}
+h2{color:#1769aa;margin:4px 0 12px}
+button{border:0;border-radius:6px;padding:9px 12px;margin:3px;background:#1677d2;color:white;cursor:pointer}
+.del{background:#c5221f}.gray{background:#5f6368}
+#status{background:#e8f0fe;color:#174ea6;padding:10px;margin-top:8px;overflow-wrap:anywhere}
+#error{color:#c5221f}
+main{max-width:1100px;margin:auto;padding:12px}
+.cell{background:white;border:1px solid #dadce0;border-radius:9px;margin:14px 0;overflow:hidden}
+.cellhead{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;padding:8px;background:#eef2f8}
+.CodeMirror{height:auto;min-height:150px;font-size:14px;line-height:1.5}
+.CodeMirror-scroll{min-height:150px;max-height:600px}
+.cm-s-eclipse .cm-keyword{color:#0000ff;font-weight:bold}
+.cm-s-eclipse .cm-string{color:#188038}
+.cm-s-eclipse .cm-number{color:#a31515}
+.cm-s-eclipse .cm-comment{color:#808080;font-style:italic}
+.cm-s-eclipse .cm-def{color:#7952a0;font-weight:bold}
+.output{padding:12px;border-top:1px solid #ddd;overflow:auto;white-space:pre-wrap;font:14px/1.5 monospace}
+.output img{max-width:100%;height:auto}
+.output iframe{width:100%;height:450px;border:0}
+textarea.notes{width:100%;min-height:90px;padding:12px;border:0}
+.line-error{background:#ffe8e8}
+.errmark{color:red;font-weight:bold}
+</style>
+</head>
+<body>
+<header>
+<h2>My Colab - Python Notebook</h2>
+<button onclick="runAll()">▶ Run All</button>
+<button onclick="addCell()">+ Code</button>
+<button onclick="addTextCell()">+ Text</button>
+<button class="gray" onclick="clearOutputs()">Clear Outputs</button>
+<button class="gray" onclick="saveNotebook()">Save</button>
+<button class="gray" onclick="shareNotebook()">Share Snapshot</button>
+<button class="gray" onclick="downloadNotebook()">Download</button>
+<div id="status">Loading Python engine...</div>
+</header>
+
+<main id="notebook"></main>
+
+<script>
+const BASE="https://cdn.jsdelivr.net/pyodide/v0.28.3/full/";
+let pyodide=null,ready=false,loading=false,count=0;
+const nb=document.getElementById("notebook");
+const status=document.getElementById("status");
+
+function msg(s,error=false){
+ status.textContent=s;
+ status.style.background=error?"#fce8e6":"#e8f0fe";
+ status.style.color=error?"#b3261e":"#174ea6";
+}
+
+const starter=`import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+x = np.arange(1, 11)
+y = x ** 2
+
+print(pd.DataFrame({"x": x, "y": y}))
+
+plt.figure(figsize=(8, 4))
+plt.plot(x, y, marker="o", color="blue")
+plt.title("My First Graph")
+plt.xlabel("X")
+plt.ylabel("Y")
+plt.grid(True)
+plt.show()`;
+
+function addCell(code=""){
+ count++;
+ const c=document.createElement("section");
+ c.className="cell";
+ const h=document.createElement("div");
+ h.className="cellhead";
+ const title=document.createElement("b");
+ title.textContent="Code cell "+count;
+ const actions=document.createElement("div");
+ const run=document.createElement("button");
+ run.textContent="▶ Run";
+ run.onclick=()=>execute(c);
+ const del=document.createElement("button");
+ del.textContent="Delete";
+ del.className="del";
+ del.onclick=()=>{if(confirm("Delete this cell?")){c.remove();renumber()}};
+ actions.append(run,del);
+ h.append(title,actions);
+ const ta=document.createElement("textarea");
+ const out=document.createElement("div");
+ out.className="output";
+ c.append(h,ta,out);
+ nb.append(c);
+ c.editor=CodeMirror.fromTextArea(ta,{
+  mode:"python",theme:"eclipse",lineNumbers:true,
+  indentUnit:4,tabSize:4,indentWithTabs:false,
+  lineWrapping:false
+ });
+ c.editor.setValue(code || (count===1?starter:""));
+ c.editor.on("change",()=>syntaxCheck(c));
+ return c;
+}
+
+function renumber(){
+ let i=0;
+ nb.querySelectorAll(".cell").forEach(c=>{
+  if(c.editor)c.querySelector("b").textContent="Code cell "+(++i);
+ });
+ count=i;
+}
+
+function addTextCell(text=""){
+ const c=document.createElement("section");
+ c.className="cell";
+ const h=document.createElement("div");
+ h.className="cellhead";
+ h.innerHTML="<b>Text / Notes</b>";
+ const d=document.createElement("button");
+ d.className="del";d.textContent="Delete";
+ d.onclick=()=>c.remove();
+ h.append(d);
+ const ta=document.createElement("textarea");
+ ta.className="notes";ta.value=text;ta.placeholder="Write notes...";
+ c.append(h,ta);
+ nb.append(c);
+}
+
+async function initializePython(){
+ if(ready)return true;
+ if(loading){
+  while(loading)await new Promise(r=>setTimeout(r,250));
+  return ready;
+ }
+ loading=true;
+ try{
+  msg("Loading Python engine. Please wait...");
+  if(!window.loadPyodide){
+   let s=document.getElementById("pyodide-loader");
+   if(!s){
+    s=document.createElement("script");
+    s.id="pyodide-loader";s.src=BASE+"pyodide.js";
+    document.head.append(s);
+   }
+   await new Promise((resolve,reject)=>{
+    if(window.loadPyodide)return resolve();
+    s.addEventListener("load",resolve,{once:true});
+    s.addEventListener("error",()=>reject(Error("Cannot download Python. Check internet.")),{once:true});
+   });
+  }
+  pyodide=await loadPyodide({indexURL:BASE});
+  msg("Loading NumPy, Pandas, Matplotlib and core packages...");
+  await pyodide.loadPackage(["numpy","pandas","matplotlib","scipy","scikit-learn","sympy"]);
+  await pyodide.runPythonAsync(`
+import sys,io,contextlib,traceback,base64,json
+import numpy as np
+import pandas as pd
+import matplotlib
+matplotlib.use("agg")
+import matplotlib.pyplot as plt
+import scipy
+import sympy as sp
+from sklearn import *
+`);
+  ready=true;
+  msg("Python ready. Installing optional Plotly...");
+  try{
+   await pyodide.loadPackage("micropip");
+   await pyodide.runPythonAsync("import micropip\nawait micropip.install('plotly')");
+   await pyodide.runPythonAsync("import plotly, plotly.express as px, plotly.graph_objects as go");
+   msg("Python ready: Plotly and core libraries loaded.");
+  }catch(e){
+   console.warn("Plotly unavailable",e);
+   msg("Python ready. Core libraries loaded; Plotly unavailable.");
+  }
+  for(const pkg of ["seaborn","networkx","statsmodels"]){
+   try{
+    pyodide.globals.set("__pkg",pkg);
+    await pyodide.runPythonAsync("import micropip\nawait micropip.install(__pkg)");
+    await pyodide.runPythonAsync("import importlib; importlib.import_module(__pkg)");
+   }catch(e){console.warn(pkg+" unavailable",e)}
+  }
+  return true;
+ }catch(e){
+  ready=false;msg("Python startup error: "+(e.message||e),true);
+  return false;
+ }finally{loading=false}
+}
+
+let syntaxTimers=new WeakMap();
+function syntaxCheck(c){
+ clearTimeout(syntaxTimers.get(c));
+ syntaxTimers.set(c,setTimeout(async()=>{
+  if(!ready||!pyodide)return;
+  try{
+   pyodide.globals.set("__check_code",c.editor.getValue());
+   await pyodide.runPythonAsync("compile(__check_code, '<cell>', 'exec')");
+   c.querySelector(".cellhead b").style.color="#202124";
+   c.querySelector(".cellhead b").title="";
+  }catch(e){
+   const m=String(e).match(/line\s+(\d+)/i);
+   c.querySelector(".cellhead b").style.color="#c5221f";
+   c.querySelector(".cellhead b").title=String(e);
+   if(m){
+    const line=Number(m[1])-1;
+    c.editor.addLineClass(line,"background","line-error");
+   }
+  }
+ },800));
+}
+
+async function execute(c){
+ if(!c.editor)return;
+ const out=c.querySelector(".output");
+ const run=c.querySelector(".cellhead button");
+ run.disabled=true;
+ try{
+  if(!await initializePython()){
+   out.textContent="Python is not ready. Check the status above.";
+   return;
+  }
+  out.textContent="Running...";
+  pyodide.globals.set("__user_code",c.editor.getValue());
+  const result=await pyodide.runPythonAsync(`
+_out=io.StringIO()
+_images=[]
+_htmls=[]
+_error=None
+try:
+ with contextlib.redirect_stdout(_out), contextlib.redirect_stderr(_out):
+  exec(__user_code,globals())
+ for _n in list(plt.get_fignums()):
+  _fig=plt.figure(_n)
+  _buf=io.BytesIO()
+  _fig.savefig(_buf,format="png",bbox_inches="tight",dpi=120)
+  _images.append(base64.b64encode(_buf.getvalue()).decode())
+  plt.close(_fig)
+ try:
+  import plotly.graph_objects as _go
+  for _name,_obj in list(globals().items()):
+   if isinstance(_obj,_go.Figure):
+    _htmls.append(_obj.to_html(include_plotlyjs="cdn"))
+ except Exception:
+  pass
+except Exception:
+ _error=traceback.format_exc()
+json.dumps({"text":_out.getvalue(),"images":_images,"htmls":_htmls,"error":_error})
+`);
+  const data=JSON.parse(result);
+  out.replaceChildren();
+  if(data.text){const p=document.createElement("pre");p.textContent=data.text;out.append(p)}
+  if(data.error){const p=document.createElement("pre");p.style.color="#b3261e";p.textContent=data.error;out.append(p)}
+  data.images.forEach(src=>{const img=document.createElement("img");img.src="data:image/png;base64,"+src;out.append(img)});
+  data.htmls.forEach(html=>{const f=document.createElement("iframe");f.setAttribute("sandbox","allow-scripts allow-same-origin");f.srcdoc=html;out.append(f)});
+  if(!data.text&&!data.error&&!data.images.length&&!data.htmls.length)out.textContent="Cell executed. No output.";
+ }catch(e){out.textContent="Execution error:\n"+(e.stack||e.message||e)}
+ finally{run.disabled=false}
+}
+
+async function runAll(){
+ for(const c of [...nb.querySelectorAll(".cell")])if(c.editor)await execute(c);
+}
+
+function clearOutputs(){
+ nb.querySelectorAll(".output").forEach(o=>o.replaceChildren());
+}
+
+function saveNotebook(){
+ try{
+  const data=[...nb.querySelectorAll(".cell")].map(c=>({
+   type:c.editor?"code":"text",
+   content:c.editor?c.editor.getValue():c.querySelector("textarea")?.value||""
+  }));
+  localStorage.setItem("my-colab-notebook",JSON.stringify(data));
+  msg("Notebook saved on this device.");
+ }catch(e){msg("Save error: "+e.message,true)}
+}
+
+function downloadNotebook(){
+ const data=[...nb.querySelectorAll(".cell")].map((c,i)=>
+  c.editor?"# Code cell "+(i+1)+"\n"+c.editor.getValue():"# Notes\n"+(c.querySelector("textarea")?.value||"")
+ ).join("\n\n");
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(new Blob([data],{type:"text/plain"}));
+ a.download="my_colab.py";
+ a.click();
+ setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+async function shareNotebook(){
+ saveNotebook();
+ const data=[...nb.querySelectorAll(".cell")].map(c=>({
+  type:c.editor?"code":"text",
+  content:c.editor?c.editor.getValue():c.querySelector("textarea")?.value||""
+ }));
+ const payload=JSON.stringify(data);
+ const url=new URL(location.href);
+ url.hash="notebook="+encodeURIComponent(btoa(unescape(encodeURIComponent(payload))));
+ try{
+  await navigator.clipboard.writeText(url.href);
+  alert("Snapshot link copied. This shares the current notebook; live synchronized editing needs a configured backend.");
+ }catch(e){prompt("Copy notebook snapshot link:",url.href)}
+}
+
+function restoreNotebook(){
+ let data=null;
+ try{
+  if(location.hash.startsWith("#notebook=")){
+   data=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(location.hash.slice(10))))));
+  }
+ }catch(e){}
+ if(!data){
+  try{data=JSON.parse(localStorage.getItem("my-colab-notebook")||"null")}catch(e){}
+ }
+ if(Array.isArray(data)&&data.length){
+  data.forEach(x=>x.type==="text"?addTextCell(x.content):addCell(x.content));
+ }else addCell();
+}
+
+restoreNotebook();
+initializePython();
+</script>
+</body>
+</html>
