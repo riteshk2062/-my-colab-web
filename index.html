@@ -1,0 +1,466 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#4338ca">
+<title>StudyHub | Notes & Assignments</title>
+<style>
+:root{--p:#4338ca;--bg:#f3f5fb;--line:#dfe3ed;--ink:#202536}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:linear-gradient(130deg,#312e81,#6366f1);color:white;padding:18px}
+.wrap,main{max-width:1100px;margin:auto}
+.brand{font-size:26px;font-weight:800}
+header p{line-height:1.5}
+nav,.toolbar,.actions,.filters{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+nav{margin-top:12px}
+button,.btn,.filebtn,select,input{font:inherit}
+button,.btn,.filebtn{border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:white;color:var(--ink);cursor:pointer;text-decoration:none;display:inline-block}
+button:hover,.btn:hover,.filebtn:hover{background:#eef2ff}
+main{padding:16px}
+.toolbar{position:sticky;top:0;z-index:5;background:white;padding:10px;border-bottom:1px solid var(--line)}
+.toolbar select{max-width:145px;padding:8px;border:1px solid var(--line);border-radius:7px}
+.toolbar input[type=color]{width:35px;height:32px;padding:2px}
+.panel{background:white;border:1px solid var(--line);border-radius:14px;padding:17px;margin:14px 0}
+.panel h2{margin-top:0}
+#editor{background:white;min-height:800px;max-width:850px;margin:16px auto;padding:38px 30px;border:1px solid #d8dbe5;box-shadow:0 5px 22px #1e293b10;outline:none;line-height:1.65;overflow-wrap:anywhere}
+#editor:focus{border-color:#a5b4fc}
+#editor img{max-width:100%;height:auto;cursor:pointer}
+#editor img.selected{outline:3px solid #6366f1}
+#editor table{border-collapse:collapse;width:100%;margin:12px 0}
+#editor td,#editor th{border:1px solid #777;padding:8px;min-width:35px}
+#editor pre{background:#171923;color:#e5e7eb;padding:16px;border-radius:8px;white-space:pre-wrap;overflow:auto;font-family:monospace}
+#editor a{color:var(--p)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:12px;padding:15px;background:white}
+.card h3{margin:5px 0}
+.card p,.hint{color:#64748b;font-size:14px;line-height:1.6}
+.filters{margin-bottom:12px}
+.filters input,.filters select{padding:10px;border:1px solid var(--line);border-radius:8px}
+#pdfViewer{width:100%;height:65vh;border:1px solid var(--line)}
+#drawArea{display:none;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:white}
+#drawCanvas{display:block;width:100%;height:220px;border:1px dashed #999;touch-action:none;background:white}
+#cropModal{display:none;position:fixed;inset:0;background:#000b;z-index:50;align-items:center;justify-content:center;padding:12px}
+.modal{background:white;border-radius:12px;padding:15px;width:min(680px,100%);max-height:95vh;overflow:auto}
+#cropCanvas{display:block;width:100%;max-height:55vh;object-fit:contain;touch-action:none}
+footer{text-align:center;color:#64748b;padding:25px}
+.hidden{display:none!important}
+@media(max-width:600px){#editor{padding:20px 14px;min-height:700px}.toolbar{position:static}main{padding:10px}}
+@media print{header,.toolbar,.actions,.hint,.no-print,footer,#drawArea{display:none!important}body,main{background:white;margin:0;padding:0}#editor{box-shadow:none;border:0;margin:0;max-width:none;padding:0}}
+</style>
+</head>
+<body>
+<header>
+ <div class="wrap">
+  <div class="brand">📚 StudyHub</div>
+  <p>Notes • Assignments • PDF • Document Editor<br>पढ़ें, लिखें और अपनी पढ़ाई की सामग्री व्यवस्थित करें।</p>
+  <nav>
+   <button onclick="document.getElementById('resources').scrollIntoView()">📚 Notes</button>
+   <button onclick="newDocument()">📄 New Document</button>
+   <button onclick="saveHTML()">💾 Save HTML</button>
+   <button onclick="window.print()">🖨 Print / PDF</button>
+  </nav>
+ </div>
+</header>
+
+<div class="toolbar no-print">
+ <select onchange="fmt('fontName',this.value)">
+  <option value="Arial">Arial</option><option value="Georgia">Georgia</option>
+  <option value="Times New Roman">Times New Roman</option><option value="Courier New">Courier New</option>
+ </select>
+ <select onchange="fmt('fontSize',this.value)">
+  <option value="3">Normal size</option><option value="2">Small</option>
+  <option value="4">Medium</option><option value="5">Large</option>
+  <option value="6">Extra large</option><option value="7">Huge</option>
+ </select>
+ <button onclick="fmt('bold')"><b>B</b></button>
+ <button onclick="fmt('italic')"><i>I</i></button>
+ <button onclick="fmt('underline')"><u>U</u></button>
+ <button onclick="fmt('strikeThrough')"><s>S</s></button>
+ <label class="filebtn">A <input type="color" value="#202536" onchange="fmt('foreColor',this.value)"></label>
+ <label class="filebtn">🖍 <input type="color" value="#fff176" onchange="highlightText(this.value)"></label>
+ <button onclick="fmt('justifyLeft')">⬅</button>
+ <button onclick="fmt('justifyCenter')">↔</button>
+ <button onclick="fmt('justifyRight')">➡</button>
+ <button onclick="fmt('insertUnorderedList')">• List</button>
+ <button onclick="fmt('insertOrderedList')">1. List</button>
+ <button onclick="undoEdit()">↶ Undo</button>
+ <button onclick="redoEdit()">↷ Redo</button>
+ <button onclick="addLink()">🔗 Link</button>
+</div>
+
+<main>
+ <section class="panel no-print">
+  <h2>🧰 Insert Tools</h2>
+  <div class="actions">
+   <label class="filebtn">📷 Upload Photo <input id="photoInput" type="file" accept="image/*" hidden></label>
+   <button onclick="cropSelected()">✂ Crop Photo</button>
+   <button onclick="resetSelectedPhoto()">↺ Reset Photo</button>
+   <label class="filebtn">📑 Open PDF <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden></label>
+   <button onclick="insertPDFLink()">🔗 Add PDF Link</button>
+   <button onclick="insertTable()">▦ Insert Table</button>
+   <button onclick="insertCode()"> &lt;/&gt; Code Block</button>
+   <button onclick="toggleDrawing()">✍ Draw / Handwrite</button>
+   <button onclick="insertDrawing()">Insert Drawing</button>
+   <button onclick="insertPageBreak()">Page Break</button>
+   <label class="filebtn">📂 Open Text/HTML <input id="openFile" type="file" accept=".txt,.html,.htm,.md" hidden></label>
+  </div>
+  <p class="hint">टेक्स्ट और टेबल पेस्ट करें, फोटो डालें, PDF खोलें या अपना डॉक्यूमेंट बनाएँ।</p>
+ </section>
+
+ <div id="drawArea" class="no-print">
+  <h3>✍ Drawing Pad</h3>
+  <div class="actions">
+   <label>Pen color <input id="penColor" type="color" value="#111111"></label>
+   <label>Pen size <input id="penSize" type="range" min="1" max="24" value="3"></label>
+   <button onclick="eraseDrawing()">Clear Drawing</button>
+  </div>
+  <canvas id="drawCanvas" width="1200" height="400"></canvas>
+  <p class="hint">माउस, उँगली या स्टायलस से लिखें।</p>
+ </div>
+
+ <article id="editor" contenteditable="true" spellcheck="true">
+  <h1>StudyHub Document</h1>
+  <p>यह आपका डॉक्यूमेंट पेज है। यहाँ लिखना शुरू करें या Word से टेक्स्ट और टेबल पेस्ट करें।</p>
+  <h2>My Notes / मेरे नोट्स</h2>
+  <p>महत्वपूर्ण टेक्स्ट चुनें और Highlight का रंग चुनें।</p>
+ </article>
+
+ <section id="pdfPanel" class="panel hidden">
+  <div class="actions">
+   <h2 style="margin-right:auto">📑 PDF Viewer</h2>
+   <button onclick="closePDF()">Close PDF</button>
+   <a id="pdfOpenTab" class="btn" target="_blank" rel="noopener">Open in New Tab</a>
+  </div>
+  <iframe id="pdfViewer" title="PDF preview"></iframe>
+ </section>
+
+ <section id="resources" class="panel">
+  <h2>📚 Notes & Assignments</h2>
+  <div class="filters">
+   <input id="search" type="search" placeholder="Search notes / खोजें">
+   <select id="subject">
+    <option value="all">All Subjects</option><option>Physics</option>
+    <option>Mathematics</option><option>Computer Science</option><option>Assignments</option>
+   </select>
+   <select id="lang">
+    <option value="all">All Languages</option><option>Hindi</option><option>English</option>
+   </select>
+  </div>
+  <div class="grid" id="resourceGrid">
+   <article class="card resource" data-subject="Physics" data-lang="Hindi" data-search="physics भौतिकी practical notes">
+    <h3>⚛️ Physics Notes</h3><p>भौतिकी के नोट्स और प्रैक्टिकल तैयारी।</p>
+    <a class="btn" href="pdf/physics-notes.pdf" download>Download PDF</a>
+   </article>
+   <article class="card resource" data-subject="Mathematics" data-lang="English" data-search="mathematics maths गणित formulas">
+    <h3>📐 Mathematics Notes</h3><p>Formulas, solved questions and revision.</p>
+    <a class="btn" href="pdf/mathematics-notes.pdf" download>Download PDF</a>
+   </article>
+   <article class="card resource" data-subject="Computer Science" data-lang="Hindi" data-search="computer science python programming coding">
+    <h3>💻 Computer Science</h3><p>Python, programming and computer fundamentals.</p>
+    <a class="btn" href="pdf/computer-notes.pdf" download>Download PDF</a>
+   </article>
+   <article class="card resource" data-subject="Assignments" data-lang="English" data-search="assignment questions answers असाइनमेंट">
+    <h3>📝 Assignments & Q/A</h3><p>Assignment questions and answers.</p>
+    <a class="btn" href="pdf/assignments.pdf" download>Download PDF</a>
+   </article>
+  </div>
+  <p id="noResults" class="hint hidden">कोई सामग्री नहीं मिली।</p>
+  <p class="hint">PDF डाउनलोड के लिए अपनी PDF फाइलें pdf फ़ोल्डर में रखें।</p>
+ </section>
+</main>
+<footer>© <span id="year"></span> StudyHub • Learn • Practice • Grow</footer>
+
+<div id="cropModal">
+ <div class="modal">
+  <h2>✂ Crop Photo</h2>
+  <p class="hint">तस्वीर पर खींचकर क्रॉप क्षेत्र चुनें।</p>
+  <canvas id="cropCanvas"></canvas>
+  <div class="actions">
+   <button onclick="applyCrop()">Apply Crop</button>
+   <button onclick="closeCrop()">Cancel</button>
+  </div>
+ </div>
+</div>
+
+<script>
+const editor=document.getElementById('editor');
+let selectedImage=null,cropSource=null,cropRect=null,cropDragging=false,cropStart=null;
+let pdfUrl=null;
+const originalPhotoData=new WeakMap();
+let undoStack=[],redoStack=[],lastSaved=editor.innerHTML;
+
+function remember(){
+ const now=editor.innerHTML;
+ if(now!==lastSaved){
+  undoStack.push(lastSaved);
+  if(undoStack.length>60)undoStack.shift();
+  redoStack=[];
+  lastSaved=now;
+ }
+}
+function fmt(command,value=null){
+ editor.focus();
+ document.execCommand(command,false,value);
+ remember();
+}
+function highlightText(color){
+ editor.focus();
+ const s=window.getSelection();
+ if(!s||s.isCollapsed){alert('पहले टेक्स्ट चुनें।');return;}
+ if(!document.execCommand('hiliteColor',false,color))
+  document.execCommand('backColor',false,color);
+ remember();
+}
+editor.addEventListener('input',()=>{remember();});
+function undoEdit(){
+ if(!undoStack.length){document.execCommand('undo');return;}
+ redoStack.push(editor.innerHTML);
+ editor.innerHTML=undoStack.pop();
+ lastSaved=editor.innerHTML;
+}
+function redoEdit(){
+ if(!redoStack.length){document.execCommand('redo');return;}
+ undoStack.push(editor.innerHTML);
+ editor.innerHTML=redoStack.pop();
+ lastSaved=editor.innerHTML;
+}
+editor.addEventListener('click',e=>{
+ if(e.target.tagName==='IMG'){
+  if(selectedImage)selectedImage.classList.remove('selected');
+  selectedImage=e.target;selectedImage.classList.add('selected');
+ }else if(selectedImage){
+  selectedImage.classList.remove('selected');selectedImage=null;
+ }
+});
+function addLink(){
+ const url=prompt('Link का URL डालें (https://...)');
+ if(url)fmt('createLink',url);
+}
+function insertNode(node){
+ editor.focus();
+ const sel=window.getSelection();
+ if(sel&&sel.rangeCount&&editor.contains(sel.anchorNode)){
+  const range=sel.getRangeAt(0);
+  range.deleteContents();range.insertNode(node);
+  range.setStartAfter(node);range.collapse(true);
+  sel.removeAllRanges();sel.addRange(range);
+ }else editor.appendChild(node);
+ remember();
+}
+function insertTable(){
+ const r=parseInt(prompt('कितनी Rows?','3'),10);
+ const c=parseInt(prompt('कितने Columns?','3'),10);
+ if(!r||!c||r<1||c<1||r>30||c>15){alert('1-30 Rows और 1-15 Columns चुनें।');return;}
+ const table=document.createElement('table');
+ for(let i=0;i<r;i++){
+  const tr=table.insertRow();
+  for(let j=0;j<c;j++)tr.insertCell().innerHTML='&nbsp;';
+ }
+ insertNode(table);insertNode(document.createElement('p'));
+}
+function insertCode(){
+ const code=prompt('यहाँ कोड पेस्ट करें:');
+ if(code===null)return;
+ const pre=document.createElement('pre');
+ const c=document.createElement('code');
+ c.textContent=code;pre.appendChild(c);
+ insertNode(pre);insertNode(document.createElement('p'));
+}
+function insertPageBreak(){
+ const hr=document.createElement('hr');
+ hr.style.cssText='border:0;border-top:2px dashed #9ca3af;margin:28px 0';
+ insertNode(hr);
+}
+function newDocument(){
+ if(confirm('नया डॉक्यूमेंट शुरू करें? पहले Save कर लें।')){
+  editor.innerHTML='<h1>StudyHub Document</h1><p><br></p>';remember();
+ }
+}
+function downloadBlob(blob,name){
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement('a');
+ a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+function saveHTML(){
+ const html='<!DOCTYPE html><html lang="hi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>StudyHub Document</title><style>body{font-family:Arial;max-width:850px;margin:30px auto;padding:20px;line-height:1.65}table{border-collapse:collapse;width:100%}td,th{border:1px solid #777;padding:8px}img{max-width:100%}pre{background:#171923;color:#eee;padding:15px;white-space:pre-wrap}</style></head><body>'+editor.innerHTML+'</body></html>';
+ downloadBlob(new Blob([html],{type:'text/html;charset=utf-8'}),'StudyHub-Document.html');
+}
+function resetSelectedPhoto(){
+ if(!selectedImage){alert('पहले फोटो पर क्लिक करें।');return;}
+ const original=originalPhotoData.get(selectedImage);
+ if(original)selectedImage.src=original;
+ selectedImage.style.width='';selectedImage.style.height='';
+ remember();
+}
+document.getElementById('photoInput').addEventListener('change',e=>{
+ const file=e.target.files[0];if(!file)return;
+ const reader=new FileReader();
+ reader.onload=()=>{
+  const img=document.createElement('img');
+  img.src=reader.result;img.alt=file.name;
+  originalPhotoData.set(img,reader.result);
+  insertNode(img);insertNode(document.createElement('p'));
+  if(selectedImage)selectedImage.classList.remove('selected');
+  selectedImage=img;img.classList.add('selected');
+  remember();
+ };
+ reader.readAsDataURL(file);e.target.value='';
+});
+function cropSelected(){
+ if(!selectedImage){alert('पहले फोटो चुनें।');return;}
+ cropSource=new Image();
+ cropSource.onload=()=>{
+  const canvas=document.getElementById('cropCanvas');
+  const scale=Math.min(900/cropSource.naturalWidth,600/cropSource.naturalHeight,1);
+  canvas.width=Math.round(cropSource.naturalWidth*scale);
+  canvas.height=Math.round(cropSource.naturalHeight*scale);
+  cropRect={x:0,y:0,w:canvas.width,h:canvas.height};
+  drawCropOverlay();
+  document.getElementById('cropModal').style.display='flex';
+ };
+ cropSource.src=selectedImage.src;
+}
+function drawCropOverlay(){
+ const canvas=document.getElementById('cropCanvas'),ctx=canvas.getContext('2d');
+ ctx.drawImage(cropSource,0,0,canvas.width,canvas.height);
+ if(!cropRect)return;
+ ctx.fillStyle='rgba(0,0,0,.45)';
+ ctx.fillRect(0,0,canvas.width,canvas.height);
+ ctx.clearRect(cropRect.x,cropRect.y,cropRect.w,cropRect.h);
+ ctx.drawImage(cropSource,cropRect.x,cropRect.y,cropRect.w,cropRect.h,cropRect.x,cropRect.y,cropRect.w,cropRect.h);
+ ctx.strokeStyle='#4f46e5';ctx.lineWidth=3;
+ ctx.strokeRect(cropRect.x,cropRect.y,cropRect.w,cropRect.h);
+}
+const cropCanvas=document.getElementById('cropCanvas');
+cropCanvas.addEventListener('pointerdown',e=>{
+ if(!cropSource)return;
+ const r=cropCanvas.getBoundingClientRect();
+ const x=(e.clientX-r.left)*cropCanvas.width/r.width;
+ const y=(e.clientY-r.top)*cropCanvas.height/r.height;
+ cropStart={x,y};cropRect={x,y,w:1,h:1};cropDragging=true;
+ cropCanvas.setPointerCapture(e.pointerId);drawCropOverlay();
+});
+cropCanvas.addEventListener('pointermove',e=>{
+ if(!cropDragging)return;
+ const r=cropCanvas.getBoundingClientRect();
+ const x=(e.clientX-r.left)*cropCanvas.width/r.width;
+ const y=(e.clientY-r.top)*cropCanvas.height/r.height;
+ cropRect={x:Math.max(0,Math.min(cropStart.x,x)),y:Math.max(0,Math.min(cropStart.y,y)),w:Math.abs(x-cropStart.x),h:Math.abs(y-cropStart.y)};
+ drawCropOverlay();
+});
+cropCanvas.addEventListener('pointerup',()=>cropDragging=false);
+function applyCrop(){
+ if(!selectedImage||!cropSource||!cropRect||cropRect.w<5||cropRect.h<5){alert('पहले क्रॉप क्षेत्र चुनें।');return;}
+ const out=document.createElement('canvas');
+ const sx=cropSource.naturalWidth/cropCanvas.width,sy=cropSource.naturalHeight/cropCanvas.height;
+ out.width=Math.round(cropRect.w*sx);out.height=Math.round(cropRect.h*sy);
+ out.getContext('2d').drawImage(cropSource,cropRect.x*sx,cropRect.y*sy,out.width,out.height,0,0,out.width,out.height);
+ selectedImage.src=out.toDataURL('image/png');
+ closeCrop();remember();
+}
+function closeCrop(){
+ document.getElementById('cropModal').style.display='none';
+ cropSource=null;cropRect=null;
+}
+document.getElementById('pdfInput').addEventListener('change',e=>{
+ const file=e.target.files[0];if(!file)return;
+ if(pdfUrl)URL.revokeObjectURL(pdfUrl);
+ pdfUrl=URL.createObjectURL(file);
+ document.getElementById('pdfViewer').src=pdfUrl;
+ document.getElementById('pdfOpenTab').href=pdfUrl;
+ document.getElementById('pdfPanel').classList.remove('hidden');
+ document.getElementById('pdfPanel').scrollIntoView({behavior:'smooth'});
+ e.target.value='';
+});
+function closePDF(){
+ document.getElementById('pdfPanel').classList.add('hidden');
+ document.getElementById('pdfViewer').src='about:blank';
+}
+function insertPDFLink(){
+ const url=prompt('ऑनलाइन PDF का पूरा URL डालें:');
+ if(!url)return;
+ if(!/^https?:\/\//i.test(url)){alert('URL https:// या http:// से शुरू होना चाहिए।');return;}
+ const a=document.createElement('a');
+ a.href=url;a.textContent='Open / Download PDF';
+ a.target='_blank';a.rel='noopener';
+ insertNode(a);insertNode(document.createElement('p'));
+}
+document.getElementById('openFile').addEventListener('change',e=>{
+ const file=e.target.files[0];if(!file)return;
+ const reader=new FileReader();
+ reader.onload=()=>{
+  if(/\.html?$/i.test(file.name)){
+   const parsed=new DOMParser().parseFromString(reader.result,'text/html');
+   editor.innerHTML=parsed.body.innerHTML;
+  }else{
+   const p=document.createElement('p');
+   p.textContent=reader.result;
+   editor.innerHTML='';editor.appendChild(p);
+  }
+  remember();
+ };
+ reader.readAsText(file);e.target.value='';
+});
+const drawArea=document.getElementById('drawArea');
+const drawCanvas=document.getElementById('drawCanvas');
+const dctx=drawCanvas.getContext('2d');
+let drawing=false;
+function toggleDrawing(){
+ drawArea.style.display=drawArea.style.display==='block'?'none':'block';
+}
+function drawPos(e){
+ const r=drawCanvas.getBoundingClientRect();
+ return {x:(e.clientX-r.left)*drawCanvas.width/r.width,y:(e.clientY-r.top)*drawCanvas.height/r.height};
+}
+drawCanvas.addEventListener('pointerdown',e=>{
+ drawing=true;drawCanvas.setPointerCapture(e.pointerId);
+ const p=drawPos(e);dctx.beginPath();dctx.moveTo(p.x,p.y);
+});
+drawCanvas.addEventListener('pointermove',e=>{
+ if(!drawing)return;
+ const p=drawPos(e);
+ dctx.strokeStyle=document.getElementById('penColor').value;
+ dctx.lineWidth=Number(document.getElementById('penSize').value);
+ dctx.lineCap='round';dctx.lineJoin='round';
+ dctx.lineTo(p.x,p.y);dctx.stroke();
+});
+drawCanvas.addEventListener('pointerup',()=>drawing=false);
+drawCanvas.addEventListener('pointercancel',()=>drawing=false);
+function eraseDrawing(){dctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);}
+function insertDrawing(){
+ const img=document.createElement('img');
+ img.src=drawCanvas.toDataURL('image/png');img.alt='Drawing';
+ insertNode(img);insertNode(document.createElement('p'));
+}
+function filterResources(){
+ const q=document.getElementById('search').value.toLowerCase();
+ const subject=document.getElementById('subject').value;
+ const lang=document.getElementById('lang').value;
+ let count=0;
+
+ document.querySelectorAll('.resource').forEach(card=>{
+  const text=(card.innerText+' '+card.dataset.search).toLowerCase();
+  const match=text.includes(q);
+  const s=subject==='all'||card.dataset.subject===subject;
+  const l=lang==='all'||card.dataset.lang===lang;
+
+  card.classList.toggle('hidden',!(match&&s&&l));
+  if(match&&s&&l) count++;
+ });
+
+ document.getElementById('noResults').classList.toggle('hidden',count>0);
+}
+
+['search','subject','lang'].forEach(id=>{
+ document.getElementById(id).addEventListener('input',filterResources);
+ document.getElementById(id).addEventListener('change',filterResources);
+});
+
+document.getElementById('year').textContent=new Date().getFullYear();
+</script>
+</body>
+</html>
